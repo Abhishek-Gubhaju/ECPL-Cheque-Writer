@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>ECPL Cheque Writer — App Icon</title>
+
+  <!-- Squircle + inner hairline -->
+  <rect width="1024" height="1024" rx="236" fill="#4E0F22"/>
+  <rect x="44" y="44" width="936" height="936" rx="196" fill="none"
+        stroke="#F7F2E7" stroke-opacity="0.22" stroke-width="5"/>
+
+  <!-- Cheque block -->
+  <g transform="rotate(-8 512 512)">
+    <rect x="150" y="336" width="724" height="392" fill="#F7F2E7"/>
+    <rect x="174" y="360" width="676" height="344" fill="none" stroke="#581026" stroke-width="5"/>
+
+    <!-- Header name, width-locked so it can never overflow -->
+    <text x="200" y="430" font-family="Arial Black, Arial, sans-serif" font-size="42"
+          font-weight="900" letter-spacing="1" fill="#581026"
+          textLength="470" lengthAdjust="spacingAndGlyphs">ECPL CHEQUE WRITER</text>
+    <line x1="200" y1="448" x2="670" y2="448" stroke="#581026" stroke-width="4"/>
+
+    <!-- Writing lines + signature line -->
+    <line x1="200" y1="512" x2="560" y2="512" stroke="#581026" stroke-width="3"/>
+    <line x1="200" y1="568" x2="610" y2="568" stroke="#581026" stroke-width="3"/>
+    <line x1="560" y1="660" x2="810" y2="660" stroke="#581026" stroke-width="3"/>
+
+    <!-- A/C PAYEE ONLY crossing, contained -->
+    <g transform="rotate(-16 380 560)">
+      <text x="252" y="540" font-family="Arial, sans-serif" font-size="30" font-weight="700"
+            fill="#581026">A/C PAYEE ONLY</text>
+      <text x="252" y="590" font-family="Arial, sans-serif" font-size="30" font-weight="700"
+            fill="#581026">A/C PAYEE ONLY</text>
+      <line x1="232" y1="610" x2="520" y2="505" stroke="#581026" stroke-width="5"/>
+    </g>
+
+    <!-- Signature squiggle, ends where the nib lands -->
+    <path d="M 560 648 c 14 -26 30 -26 34 -6 c 4 20 16 20 24 0 c 6 -16 16 -14 22 2"
+          fill="none" stroke="#581026" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Cuff (behind everything of the hand) -->
+  <rect x="856" y="560" width="110" height="150" rx="16" transform="rotate(24 911 635)"
+        fill="#F7F2E7" stroke="#581026" stroke-width="6"/>
+
+  <!-- Pen: barrel + nib as one outlined group, under the fist -->
+  <g transform="rotate(43 784 538)">
+    <rect x="770" y="400" width="28" height="276" rx="14"
+          fill="#F7F2E7" stroke="#581026" stroke-width="6"/>
+    <path d="M 770 676 L 784 730 L 798 676 Z"
+          fill="#F7F2E7" stroke="#581026" stroke-width="5"/>
+    <line x1="784" y1="700" x2="784" y2="724" stroke="#581026" stroke-width="3"/>
+  </g>
+
+  <!-- Fist over the pen middle = grip -->
+  <path d="M 742 470 c 52 -34 122 -20 152 34 c 28 52 10 116 -44 142
+           c -52 26 -114 8 -142 -40 c -26 -46 -14 -104 34 -136 z"
+        fill="#F7F2E7" stroke="#581026" stroke-width="6"/>
+
+  <!-- Thumb over the barrel -->
+  <ellipse cx="748" cy="520" rx="40" ry="26" transform="rotate(-30 748 520)"
+           fill="#F7F2E7" stroke="#581026" stroke-width="6"/>
+
+  <!-- Knuckle creases -->
+  <path d="M 726 560 q 26 22 58 18 M 736 596 q 22 18 50 14"
+        fill="none" stroke="#581026" stroke-width="5" stroke-linecap="round"/>
+</svg>
