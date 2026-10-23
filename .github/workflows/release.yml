@@ -36,24 +36,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Uploaded by hand? This prints exactly what is missing before any build runs.
+      # Uploaded by hand? This names every missing file before any build runs.
+      # scripts/expected-files.txt is the full manifest of the working export.
       - name: Verify project layout
         shell: bash
         run: |
           node -e '
             const fs = require("fs");
-            const required = [
-              "package.json", "index.html", "vite.config.ts", "tsconfig.json",
-              "src/main.ts", "src/App.vue",
-              "src-tauri/Cargo.toml", "src-tauri/build.rs",
+            const core = [
+              "package.json", "package-lock.json", "index.html", "vite.config.ts", "tsconfig.json",
+              "src/main.ts", "src/App.vue", "src/store.ts",
+              "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/build.rs",
               "src-tauri/tauri.conf.json", "src-tauri/src/main.rs",
+              "src-tauri/capabilities/default.json",
+              "src-tauri/icons/AppIcon.png", "src-tauri/icons/AppIcon.icns",
+              "src-tauri/icons/icon.ico", "src-tauri/icons/app-icon.svg",
             ];
+            const manifest = "scripts/expected-files.txt";
+            const expected = fs.existsSync(manifest)
+              ? fs.readFileSync(manifest, "utf8").split("\n").map((s) => s.trim()).filter(Boolean)
+              : [];
+            const required = [...new Set([...core, ...expected])];
             const missing = required.filter((f) => !fs.existsSync(f));
-            const tracked = require("child_process")
-              .execSync("git ls-files").toString().trim().split("\n").length;
-            console.log(`Repository has ${tracked} tracked files.`);
+            const tracked = require("child_process").execSync("git ls-files")
+              .toString().split("\n").filter(Boolean).length;
+            console.log(`Repository has ${tracked} tracked files; ${expected.length} expected.`);
             if (missing.length) {
-              console.error("\nMISSING REQUIRED FILES:");
+              console.error(`\nMISSING ${missing.length} FILE(S):`);
               missing.forEach((f) => console.error("  - " + f));
               process.exit(1);
             }
