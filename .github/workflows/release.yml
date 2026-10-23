@@ -1,50 +1,96 @@
-name: Release Build
+name: Release
 
 on:
-  release:
-    types: [published]
-    workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: macos-latest
-            target: universal-apple-darwin
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
+          # Universal macOS build (Intel + Apple Silicon)
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust_targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          
+          # Windows x64 build
+          - platform: windows-latest
+            args: "--target x86_64-pc-windows-msvc"
+            rust_targets: "x86_64-pc-windows-msvc"
+          
+          # Linux x64 build
+          - platform: ubuntu-22.04
+            args: ""
+            rust_targets: "x86_64-unknown-linux-gnu"
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            javascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            patchelf
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
 
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app
+      - name: Build and Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event.release.tag_name }}
-          releaseName: ${{ github.event.release.name }}
-          releaseBody: ${{ github.event.release.body }}
-          releaseDraft: false
+          tagName: ${{ github.ref_name }}
+          releaseName: "ECPL Cheque Writer ${{ github.ref_name }}"
+          releaseBody: |
+            ## ECPL Cheque Writer ${{ github.ref_name }}
+            
+            Initial release of the ECPL Cheque Writer application.
+            
+            ### Installation
+            - **macOS**: Download the `.dmg` file.
+            - **Windows**: Download the `-setup.exe` or `.msi` file.
+            - **Linux**: Download the `.AppImage` or `.deb` file.
+            
+            Please see the README for detailed installation instructions regarding unsigned apps.
+          releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
