@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::fs;
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{Emitter, Runtime};
 
@@ -125,8 +126,21 @@ fn print_with_webview(webview: tauri::WebviewWindow) -> Result<(), String> {
     webview.print().map_err(|e| e.to_string())
 }
 
+/// Write the calibration backup to the path the user picked in the save dialog.
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    fs::write(&path, contents).map_err(|e| format!("Could not write {path}: {e}"))
+}
+
+/// Read a calibration backup from the path the user picked in the open dialog.
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .menu(|handle| build_menu(handle))
         .on_menu_event(|app, event| {
             let id = event.id.as_ref();
@@ -134,7 +148,11 @@ fn main() {
                 let _ = app.emit("ecpl://menu", id.to_string());
             }
         })
-        .invoke_handler(tauri::generate_handler![print_with_webview])
+        .invoke_handler(tauri::generate_handler![
+            print_with_webview,
+            write_text_file,
+            read_text_file
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

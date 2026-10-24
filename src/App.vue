@@ -5,7 +5,8 @@ import {
   store, chequeData, toLegacyLayout, loadFromStorage,
   applyLayout, syncFormToFields, resetLayout,
   applyProfile, resetProfile, setLastLayout, setLastProfile,
-  saveLayout, saveProfile, requestFit
+  saveLayout, saveProfile, requestFit,
+  buildCalibrationFile, parseCalibration, applyCalibration
 } from '@/store'
 import type { ChequeLayout, PrinterProfile } from '@/types/cheque'
 import type { PersistedLayout, PersistedProfile } from '@/store'
@@ -14,9 +15,10 @@ import LdPanel from '@/components/LdPanel.vue'
 import PrinterPanel from '@/components/PrinterPanel.vue'
 import EditorWorkspace from '@/components/EditorWorkspace.vue'
 import PrinterWorkspace from '@/components/PrinterWorkspace.vue'
-import { Button, Checkbox, Input, Select, Toast, Icon, PromptModal, useToast } from '@/components/ui'
+import { Button, Checkbox, Input, Select, Toast, Icon, PromptModal, Modal, useToast } from '@/components/ui'
 import { usePrompt } from '@/hooks/usePrompt'
 import { isMacOS, shortcut } from '@/utils/platform'
+import { saveCalibrationFile, openCalibrationFile } from '@/utils/calibrationFile'
 import appIcon from '../src-tauri/icons/app-icon.svg'
 
 const toast = useToast()
@@ -94,6 +96,69 @@ const profileOptions = computed(() => {
 
 const layoutNames = computed(() => Object.keys(store.layouts))
 const profileNames = computed(() => Object.keys(store.profiles))
+
+/* ----- calibration backup: every saved layout + printer profile in one file ----- */
+
+/** Set once a file is read and validated; the modal then asks merge or replace. */
+const importPending = ref<{ text: string; layouts: number; profiles: number; skipped: number } | null>(null)
+const backupBusy = ref(false)
+
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback
+}
+
+async function exportCalibration() {
+  if (backupBusy.value) return
+  backupBusy.value = true
+  try {
+    const file = buildCalibrationFile()
+    const stamp = new Date().toISOString().slice(0, 10)
+    const saved = await saveCalibrationFile(`ecpl-calibration-${stamp}.json`, JSON.stringify(file, null, 2))
+    if (!saved) return // user cancelled the save dialog
+    const n = Object.keys(file.layouts).length + Object.keys(file.profiles).length
+    toast.success(n ? `Exported ${n} saved preset${n === 1 ? '' : 's'}` : 'Exported an empty backup')
+  } catch (e) {
+    toast.error(errorMessage(e, 'Could not export the backup'))
+  } finally {
+    backupBusy.value = false
+  }
+}
+
+async function chooseImport() {
+  if (backupBusy.value) return
+  backupBusy.value = true
+  try {
+    const text = await openCalibrationFile()
+    if (text === null) return // cancelled
+    const parsed = parseCalibration(text)
+    importPending.value = {
+      text,
+      layouts: Object.keys(parsed.layouts).length,
+      profiles: Object.keys(parsed.profiles).length,
+      skipped: parsed.skipped
+    }
+  } catch (e) {
+    toast.error(errorMessage(e, 'Could not read that backup'))
+  } finally {
+    backupBusy.value = false
+  }
+}
+
+function runImport(mode: 'merge' | 'replace') {
+  const pending = importPending.value
+  if (!pending) return
+  try {
+    const out = applyCalibration(pending.text, mode)
+    importPending.value = null
+    toast.success(
+      `Imported ${out.layouts} layout${out.layouts === 1 ? '' : 's'} and ` +
+        `${out.profiles} printer profile${out.profiles === 1 ? '' : 's'}`
+    )
+  } catch (e) {
+    importPending.value = null
+    toast.error(errorMessage(e, 'Could not import that backup'))
+  }
+}
 
 /** Print cheque: show the confirm dialog (shows the cheque preview). */
 function doPrint() {
@@ -347,6 +412,28 @@ onBeforeUnmount(() => {
           <Icon name="printer" :size="14" />
           <span class="sidebar-item-name">{{ name }}</span>
         </button>
+
+        <div class="sidebar-group-label">Backup</div>
+        <button
+          type="button"
+          class="sidebar-item"
+          :disabled="backupBusy"
+          title="Save every layout and printer profile to a JSON file"
+          @click="exportCalibration"
+        >
+          <Icon name="save" :size="14" />
+          <span class="sidebar-item-name">Export presets…</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-item"
+          :disabled="backupBusy"
+          title="Restore layouts and printer profiles from a backup file"
+          @click="chooseImport"
+        >
+          <Icon name="file-text" :size="14" />
+          <span class="sidebar-item-name">Import presets…</span>
+        </button>
       </nav>
 
       <main class="content">
@@ -428,6 +515,34 @@ onBeforeUnmount(() => {
       :cheque-data="chequeData"
       @done="onPrintDone"
     />
+
+    <!-- Import: the file is already read and validated; pick how it lands. -->
+    <Modal
+      :model-value="!!importPending"
+      title="Import presets"
+      width="460px"
+      @update:model-value="importPending = null"
+    >
+      <p v-if="importPending" class="import-summary">
+        This file has <b>{{ importPending.layouts }}</b>
+        {{ importPending.layouts === 1 ? 'layout' : 'layouts' }} and
+        <b>{{ importPending.profiles }}</b>
+        {{ importPending.profiles === 1 ? 'printer profile' : 'printer profiles' }}.
+        <span v-if="importPending.skipped">
+          {{ importPending.skipped }} unreadable
+          {{ importPending.skipped === 1 ? 'entry' : 'entries' }} will be ignored.
+        </span>
+      </p>
+      <p class="import-note">
+        <b>Merge</b> keeps the presets you already have; where a name appears in both, the file wins.
+        <b>Replace</b> clears the current lists first.
+      </p>
+      <div class="import-actions">
+        <Button variant="ghost" @click="importPending = null">Cancel</Button>
+        <Button @click="runImport('merge')">Merge</Button>
+        <Button variant="danger" @click="runImport('replace')">Replace all</Button>
+      </div>
+    </Modal>
 
     <PromptModal
       v-model="promptVisible"
@@ -534,5 +649,29 @@ kbd {
   height: 1px;
   background: var(--hairline);
   margin: var(--space-xl) 0 var(--space-lg);
+}
+
+.sidebar-item:disabled {
+  opacity: 0.45;
+}
+
+.import-summary {
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-md);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.import-note {
+  margin: 0 0 var(--space-lg);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
 }
 </style>

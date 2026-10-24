@@ -118,8 +118,8 @@ export function boxStripWidth(f: FieldDef): number | null {
 const WINDOWS_FIELD_POS: Record<string, { x: number; y: number }> = {
   'p-date': { x: 13.68, y: 0.77 },
   'p-amount': { x: 13.8, y: 3.24 },
-  'p-words': { x: 2.54, y: 2.7 },
-  'p-payee': { x: 6.23, y: 2.11 }
+  'p-words': { x: 2.44, y: 2.7 },
+  'p-payee': { x: 6.13, y: 2.11 }
 }
 
 /**
@@ -605,6 +605,98 @@ export function loadFromStorage() {
   if (store.profileSelect && store.profiles[store.profileSelect]) {
     applyProfile(store.profiles[store.profileSelect] as PersistedProfile)
   }
+}
+
+/* ---------- calibration backup: one JSON file for every saved preset ---------- */
+
+export interface CalibrationFile {
+  app: string
+  kind: string
+  version: number
+  exportedAt: string
+  layouts: Record<string, PersistedLayout>
+  profiles: Record<string, PersistedProfile>
+}
+
+/** Snapshot of everything the user calibrated, ready to write to disk. */
+export function buildCalibrationFile(): CalibrationFile {
+  return {
+    app: 'ECPL Cheque Writer',
+    kind: 'calibration',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    layouts: JSON.parse(JSON.stringify(store.layouts)),
+    profiles: JSON.parse(JSON.stringify(store.profiles))
+  }
+}
+
+function isRecord(v: unknown): v is Record<string, any> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+export interface ParsedCalibration {
+  layouts: Record<string, PersistedLayout>
+  profiles: Record<string, PersistedProfile>
+  skipped: number
+}
+
+/** Validate an imported file. Throws with a user-readable message when unusable. */
+export function parseCalibration(text: string): ParsedCalibration {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error('That file is not valid JSON.')
+  }
+  if (!isRecord(data)) throw new Error('That file is not an ECPL calibration backup.')
+  if (!isRecord(data.layouts) && !isRecord(data.profiles)) {
+    throw new Error('No saved layouts or printer profiles found in that file.')
+  }
+
+  const layoutSrc = isRecord(data.layouts) ? data.layouts : {}
+  const profileSrc = isRecord(data.profiles) ? data.profiles : {}
+  const layouts: Record<string, PersistedLayout> = {}
+  const profiles: Record<string, PersistedProfile> = {}
+  let skipped = 0
+
+  for (const [name, entry] of Object.entries(layoutSrc)) {
+    // current shape (cheque + fields[]) or the legacy canvas/fields shape
+    const usable = isRecord(entry) && (Array.isArray(entry.fields) || isRecord(entry.canvas))
+    if (usable && name.trim()) layouts[name] = entry as PersistedLayout
+    else skipped++
+  }
+  for (const [name, entry] of Object.entries(profileSrc)) {
+    const usable = isRecord(entry) && (typeof entry.x === 'number' || typeof entry.y === 'number')
+    if (usable && name.trim()) profiles[name] = entry as PersistedProfile
+    else skipped++
+  }
+  if (!Object.keys(layouts).length && !Object.keys(profiles).length) {
+    throw new Error('That file contains no readable layouts or profiles.')
+  }
+  return { layouts, profiles, skipped }
+}
+
+export interface ImportOutcome {
+  layouts: number
+  profiles: number
+  skipped: number
+}
+
+/**
+ * Bring an imported backup in, either alongside what is already saved or in
+ * place of it. Imported entries win on a name clash in both modes: a restored
+ * backup is there to repair calibration, not to lose to an older copy.
+ */
+export function applyCalibration(text: string, mode: 'merge' | 'replace'): ImportOutcome {
+  const { layouts, profiles, skipped } = parseCalibration(text)
+  store.layouts = mode === 'replace' ? { ...layouts } : { ...store.layouts, ...layouts }
+  store.profiles = mode === 'replace' ? { ...profiles } : { ...store.profiles, ...profiles }
+  saveLayouts()
+  saveProfiles()
+  // A replaced preset can remove the one that was selected at launch.
+  if (store.layoutSelect && !store.layouts[store.layoutSelect]) setLastLayout('')
+  if (store.profileSelect && !store.profiles[store.profileSelect]) setLastProfile('')
+  return { layouts: Object.keys(layouts).length, profiles: Object.keys(profiles).length, skipped }
 }
 
 /* ---------- legacy bridge (print preview + old saved data) ---------- */
