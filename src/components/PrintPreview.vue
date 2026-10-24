@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, computed } from 'vue'
+import { nextTick, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Button, Icon, useToast } from '@/components/ui'
 import ChequeOverlay from './ChequeOverlay.vue'
 import ChequeCanvas from './ChequeCanvas.vue'
@@ -31,6 +31,9 @@ const scaleBox = computed(() => ({
 /** Ref for the teleported print sheet — kept mounted for the whole print session. */
 const sheetEl = ref<HTMLElement | null>(null)
 
+/** One print job at a time: the dialog stays open until afterprint fires. */
+const busy = ref(false)
+
 /** The printed page is exactly the chosen paper, so 1cm here = 1cm on paper. */
 const paper = computed(() => paperSize())
 // A hair under the page height: WebKit rounds a box that exactly fills the
@@ -55,6 +58,8 @@ const sheetStyle = computed(() => ({
  * + close on the afterprint event (fires when the panel closes, incl. cancel).
  */
 async function handlePrint() {
+  if (busy.value) return
+  busy.value = true
   try {
     // 1. Flush Vue DOM updates (Teleport to body)
     await nextTick()
@@ -121,6 +126,7 @@ async function handlePrint() {
     const restore = () => {
       if (restored) return
       restored = true
+      busy.value = false
       window.removeEventListener('afterprint', restore)
       if (savedAppStyle === null) appEl.removeAttribute('style')
       else appEl.setAttribute('style', savedAppStyle)
@@ -149,12 +155,36 @@ async function handlePrint() {
     // 8. window.print() is the path that WKWebView renders correctly.
     window.print()
   } catch (err) {
+    busy.value = false
     const msg = err instanceof Error ? err.message : String(err)
     console.error('Print failed:', err)
     toastError('Print failed: ' + msg)
     emit('done')
   }
 }
+
+/**
+ * Ctrl+P (Windows) / ⌘P (macOS) inside the confirm dialog.
+ *
+ * The app-level handler deliberately ignores the shortcut while this dialog
+ * is open, which is why the key looked dead here. Capturing on window while
+ * the dialog is mounted gives the key back to the print job itself.
+ */
+function onPreviewShortcut(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+  if (e.key.toLowerCase() !== 'p') return
+  e.preventDefault()
+  e.stopPropagation()
+  void handlePrint()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onPreviewShortcut, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onPreviewShortcut, true)
+})
 </script>
 
 <template>

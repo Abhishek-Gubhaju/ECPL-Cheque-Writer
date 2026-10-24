@@ -1,5 +1,6 @@
 import { reactive, computed, watch } from 'vue'
 import { convertToRupees, formatToDDMMYYYY } from '@/utils/rupees'
+import { isWindows } from '@/utils/platform'
 import type { ChequeLayout, BoxSettings, FieldConfig } from '@/types/cheque'
 import { BOX_CAPABLE_FIELDS } from '@/types/cheque'
 
@@ -105,12 +106,34 @@ export function boxStripWidth(f: FieldDef): number | null {
   return Math.round(w * 10) / 10
 }
 
+/**
+ * Windows-only field positions, in cm from the cheque's top-left.
+ *
+ * Windows prints the cheque from a different origin than macOS (the driver
+ * offsets the page), so these four data fields sit at slightly different
+ * coordinates there. The macOS calibration below is untouched: these values
+ * are only read when `isWindows` is true, so the Mac build renders exactly
+ * as before.
+ */
+const WINDOWS_FIELD_POS: Record<string, { x: number; y: number }> = {
+  'p-date': { x: 13.68, y: 0.77 },
+  'p-amount': { x: 13.8, y: 3.24 },
+  'p-words': { x: 2.17, y: 2.74 },
+  'p-payee': { x: 5.51, y: 2.05 }
+}
+
+/** Pick the Windows coordinate on Windows, the macOS one everywhere else. */
+function platformPos(id: string, macX: number, macY: number): { x: number; y: number } {
+  if (isWindows && WINDOWS_FIELD_POS[id]) return WINDOWS_FIELD_POS[id]
+  return { x: macX, y: macY }
+}
+
 function defaultFields(): FieldDef[] {
   return [
-    { id: 'p-date', label: 'Date', text: '', x: 13.32, y: 0.77, fontSize: 15, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-date') },
-    { id: 'p-payee', label: 'Payee', text: '', x: 5.51, y: 1.95, fontSize: 14, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
-    { id: 'p-words', label: 'Amount in words', text: '', x: 2.17, y: 2.64, w: 11.4, lineH: 2, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
-    { id: 'p-amount', label: 'Amount in figures', text: '', x: 13.6, y: 3.24, fontSize: 13, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-amount') },
+    { id: 'p-date', label: 'Date', text: '', ...platformPos('p-date', 13.32, 0.77), fontSize: 15, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-date') },
+    { id: 'p-payee', label: 'Payee', text: '', ...platformPos('p-payee', 5.51, 1.95), fontSize: 14, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
+    { id: 'p-words', label: 'Amount in words', text: '', ...platformPos('p-words', 2.17, 2.64), w: 11.4, lineH: 2, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
+    { id: 'p-amount', label: 'Amount in figures', text: '', ...platformPos('p-amount', 13.6, 3.24), fontSize: 13, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-amount') },
     { id: 'p-crossing', label: 'A/C Payee crossing', text: 'A/C PAYEE ONLY', x: 0.8, y: 0.8, fontSize: 11, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
     { id: 'p-cheque-no', label: 'Cheque number', text: '0004567890', x: 8.0, y: 0.9, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: false, box: defaultBox('p-cheque-no') },
     // Hidden by default — toggle on in the Edit Fields list

@@ -16,9 +16,14 @@ import EditorWorkspace from '@/components/EditorWorkspace.vue'
 import PrinterWorkspace from '@/components/PrinterWorkspace.vue'
 import { Button, Checkbox, Input, Select, Toast, Icon, PromptModal, useToast } from '@/components/ui'
 import { usePrompt } from '@/hooks/usePrompt'
+import { isMacOS, shortcut } from '@/utils/platform'
 import appIcon from '../src-tauri/icons/app-icon.svg'
 
 const toast = useToast()
+
+/** ⌘P on macOS, Ctrl+P on Windows — shown on the button and in tooltips. */
+const printShortcut = shortcut('P')
+const sidebarShortcut = isMacOS ? '⌥⌘S' : 'Ctrl+Alt+S'
 
 /** Sidebar navigation — the three workspaces of the app. */
 const sections = [
@@ -105,7 +110,10 @@ function onShortcut(e: KeyboardEvent) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
   if (e.key.toLowerCase() !== 'p') return
   e.preventDefault() // stop the browser/webview's own print dialog
-  if (!printing.value) doPrint()
+  // While the confirm dialog is open, PrintPreview owns the shortcut and
+  // sends it to the actual print job. Here it would only be a no-op.
+  if (printing.value) return
+  doPrint()
 }
 
 /** Size the window around the form on open — a 3px margin, nothing more. */
@@ -280,7 +288,7 @@ onBeforeUnmount(() => {
         :class="{ 'is-on': sidebarOpen }"
         :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
         :aria-expanded="sidebarOpen"
-        :title="sidebarOpen ? 'Hide sidebar (⌥⌘S)' : 'Show sidebar (⌥⌘S)'"
+        :title="`${sidebarOpen ? 'Hide' : 'Show'} sidebar (${sidebarShortcut})`"
         @click="toggleSidebar"
       >
         <Icon name="more-horizontal" :size="16" :stroke="2" />
@@ -289,7 +297,7 @@ onBeforeUnmount(() => {
       <Button variant="primary" @click="doPrint">
         <Icon name="printer" :size="14" />
         <span>Print</span>
-        <kbd>⌘P</kbd>
+        <kbd>{{ printShortcut }}</kbd>
       </Button>
     </header>
 
