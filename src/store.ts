@@ -118,8 +118,8 @@ export function boxStripWidth(f: FieldDef): number | null {
 const WINDOWS_FIELD_POS: Record<string, { x: number; y: number }> = {
   'p-date': { x: 13.68, y: 0.77 },
   'p-amount': { x: 13.8, y: 3.24 },
-  'p-words': { x: 2.44, y: 2.7 },
-  'p-payee': { x: 6.13, y: 2.11 }
+  'p-words': { x: 2.54, y: 2.7 },
+  'p-payee': { x: 6.23, y: 2.11 }
 }
 
 /**
