@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   store, selectedField, fitZoom, movePrinterXY, clamp,
   PX_PER_CM, round2, paperSize
@@ -31,10 +31,32 @@ const zoomFrameStyle = computed(() => ({
 
 const posChip = computed(() => `${store.printer.x.toFixed(2)} / ${store.printer.y.toFixed(2)} cm`)
 
+/** The zoom this panel last chose by fitting, so "user zoomed" is detectable. */
+let lastFit = 0
+
 function fit() {
   if (!wsEl.value) return
-  store.printer.zoom = fitZoom(paper.value.w, paper.value.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  lastFit = fitZoom(paper.value.w, paper.value.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  store.printer.zoom = lastFit
 }
+
+/**
+ * Re-fit as the window grows or shrinks.
+ *
+ * Skips the update once the zoom no longer matches the fitted value, so a
+ * manual zoom (HUD, menu, keyboard) is never yanked away by a resize; the
+ * Fit button puts the panel back into step.
+ */
+function refitOnResize() {
+  if (!wsEl.value) return
+  if (Math.abs(store.printer.zoom - lastFit) > 0.5) return
+  const z = fitZoom(paper.value.w, paper.value.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  if (z === lastFit) return
+  lastFit = z
+  store.printer.zoom = z
+}
+
+let resizeObserver: ResizeObserver | null = null
 
 // panels ask for a fit by incrementing store.fitRequest
 watch(() => store.fitRequest, () => fit())
@@ -42,12 +64,22 @@ watch(() => store.fitRequest, () => fit())
 // the sheet's orientation follows the cheque's rotation
 watch(() => store.printer.rot, () => requestAnimationFrame(fit))
 
+// a different paper size changes the sheet, so refit it to the well
+watch(() => [paper.value.w, paper.value.h], refitOnResize)
+
 // Fit when opened: once on the next frame, again after layout settles
 onMounted(() => {
   requestAnimationFrame(() => {
     fit()
     setTimeout(fit, 120)
   })
+  resizeObserver = new ResizeObserver(refitOnResize)
+  if (wsEl.value) resizeObserver.observe(wsEl.value)
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
 })
 
 function setZoom(value: number) {

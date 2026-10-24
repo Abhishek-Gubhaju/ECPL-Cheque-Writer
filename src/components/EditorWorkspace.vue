@@ -31,10 +31,32 @@ const wrapStyle = computed(() => ({
   transformOrigin: 'top left'
 }))
 
+/** The zoom this panel last chose by fitting, so "user zoomed" is detectable. */
+let lastFit = 0
+
 function fit() {
   if (!wsEl.value) return
-  store.ldZoom = fitZoom(store.cheque.w, store.cheque.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  lastFit = fitZoom(store.cheque.w, store.cheque.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  store.ldZoom = lastFit
 }
+
+/**
+ * Re-fit as the window grows or shrinks.
+ *
+ * Skips the update once the zoom no longer matches the fitted value, so a
+ * manual zoom (HUD, menu, keyboard) is never yanked away by a resize; the
+ * Fit button puts the panel back into step.
+ */
+function refitOnResize() {
+  if (!wsEl.value) return
+  if (Math.abs(store.ldZoom - lastFit) > 0.5) return
+  const z = fitZoom(store.cheque.w, store.cheque.h, wsEl.value.clientWidth, wsEl.value.clientHeight, 64)
+  if (z === lastFit) return
+  lastFit = z
+  store.ldZoom = z
+}
+
+let resizeObserver: ResizeObserver | null = null
 
 /** Fit when opened: once on the next frame, again after layout settles */
 function fitOnOpen() {
@@ -80,11 +102,20 @@ function onKey(e: KeyboardEvent) {
   if (handled) e.preventDefault()
 }
 
+// the cheque's own size can change too — refit when it does
+watch(() => [store.cheque.w, store.cheque.h], refitOnResize)
+
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   fitOnOpen()
+  resizeObserver = new ResizeObserver(refitOnResize)
+  if (wsEl.value) resizeObserver.observe(wsEl.value)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
 </script>
 
 <template>
