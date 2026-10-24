@@ -118,8 +118,17 @@ export function boxStripWidth(f: FieldDef): number | null {
 const WINDOWS_FIELD_POS: Record<string, { x: number; y: number }> = {
   'p-date': { x: 13.68, y: 0.77 },
   'p-amount': { x: 13.8, y: 3.24 },
-  'p-words': { x: 2.17, y: 2.74 },
-  'p-payee': { x: 5.51, y: 2.05 }
+  'p-words': { x: 2.44, y: 2.7 },
+  'p-payee': { x: 6.13, y: 2.11 }
+}
+
+/**
+ * Windows-only wrap widths, in cm, for fields whose box is a different size
+ * on Windows (the words line runs slightly shorter there). Same rule as
+ * above: read only when `isWindows` is true.
+ */
+const WINDOWS_FIELD_W: Record<string, number> = {
+  'p-words': 11.3
 }
 
 /** Pick the Windows coordinate on Windows, the macOS one everywhere else. */
@@ -128,11 +137,17 @@ function platformPos(id: string, macX: number, macY: number): { x: number; y: nu
   return { x: macX, y: macY }
 }
 
+/** Pick the Windows wrap width on Windows, the macOS one everywhere else. */
+function platformW(id: string, macW: number): number {
+  if (isWindows && WINDOWS_FIELD_W[id]) return WINDOWS_FIELD_W[id]
+  return macW
+}
+
 function defaultFields(): FieldDef[] {
   return [
     { id: 'p-date', label: 'Date', text: '', ...platformPos('p-date', 13.32, 0.77), fontSize: 15, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-date') },
     { id: 'p-payee', label: 'Payee', text: '', ...platformPos('p-payee', 5.51, 1.95), fontSize: 14, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
-    { id: 'p-words', label: 'Amount in words', text: '', ...platformPos('p-words', 2.17, 2.64), w: 11.4, lineH: 2, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
+    { id: 'p-words', label: 'Amount in words', text: '', ...platformPos('p-words', 2.17, 2.64), w: platformW('p-words', 11.4), lineH: 2, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
     { id: 'p-amount', label: 'Amount in figures', text: '', ...platformPos('p-amount', 13.6, 3.24), fontSize: 13, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true, box: defaultBox('p-amount') },
     { id: 'p-crossing', label: 'A/C Payee crossing', text: 'A/C PAYEE ONLY', x: 0.8, y: 0.8, fontSize: 11, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: true },
     { id: 'p-cheque-no', label: 'Cheque number', text: '0004567890', x: 8.0, y: 0.9, fontSize: 12, fontFamily: DEFAULT_FAMILIES, fontWeight: 'bold', visible: false, box: defaultBox('p-cheque-no') },
